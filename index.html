@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>Kids Are Heard</title>
+<style>
+  body { font-family:Poppins,sans-serif;background:linear-gradient(135deg,#f9c5d1,#9796f0);
+         display:flex;flex-direction:column;align-items:center;min-height:100vh;margin:0;padding:10px;}
+  h1 { color:#333;margin:10px 0;}
+  #inputArea,#authArea { width:90%;max-width:400px;display:flex;gap:8px;margin-bottom:10px;}
+  input { flex:1;padding:10px;border:none;border-radius:8px;}
+  button { padding:10px 14px;border:none;border-radius:8px;background:#6c63ff;color:white;cursor:pointer;}
+  .post { background:white;width:90%;max-width:400px;border-radius:12px;margin:8px 0;padding:10px;
+          box-shadow:0 3px 6px rgba(0,0,0,0.1);}
+  .like-btn { background:none;color:#6c63ff;border:none;cursor:pointer;}
+  .delete-btn { background:#ff4d4d;color:white;border:none;padding:5px 10px;border-radius:8px;cursor:pointer;display:none;}
+  #leaderboard { background:white;width:90%;max-width:400px;border-radius:12px;padding:10px;margin-top:20px;}
+  #adminHint { position:fixed;bottom:5px;font-size:10px;color:#fff;opacity:.3;}
+</style>
+</head>
+<body>
+<h1>Kids Are Heard 💬</h1>
+
+<div id="authArea">
+  <input id="username" placeholder="Username" />
+  <input id="password" type="password" placeholder="Password" />
+  <button onclick="login()">Login</button>
+  <button onclick="signup()">Sign Up</button>
+</div>
+
+<div id="userInfo"></div>
+
+<div id="inputArea" style="display:none;">
+  <input id="messageInput" placeholder="Type how you feel about games or apps and how they can be improved..." />
+  <button onclick="addPost()">Post</button>
+</div>
+
+<div id="posts"></div>
+
+<div id="leaderboard">
+  <h3>🏆 Leaderboard</h3>
+  <ol id="boardList"></ol>
+</div>
+
+<p id="adminHint">(press 8 to toggle admin mode)</p>
+
+<script>
+let posts = JSON.parse(localStorage.getItem("postsData")||"[]");
+let users = JSON.parse(localStorage.getItem("usersData")||"{}");
+let loggedInUser = localStorage.getItem("currentUser") || null;
+let adminMode=false;
+
+function save(){
+  localStorage.setItem("postsData",JSON.stringify(posts));
+  localStorage.setItem("usersData",JSON.stringify(users));
+  if(loggedInUser)localStorage.setItem("currentUser",loggedInUser);
+}
+
+function signup(){
+  const u=document.getElementById("username").value.trim();
+  const p=document.getElementById("password").value.trim();
+  if(!u||!p)return alert("Please fill all fields");
+  if(users[u])return alert("Username already taken!");
+  users[u]={password:p,likes:{}};
+  save();
+  alert("Account created! Please login now.");
+}
+
+function login(){
+  const u=document.getElementById("username").value.trim();
+  const p=document.getElementById("password").value.trim();
+  if(!u||!p)return alert("Please fill all fields");
+  if(!users[u]||users[u].password!==p)return alert("Wrong username or password!");
+  loggedInUser=u;
+  save();
+  renderAuth();
+}
+
+function logout(){
+  loggedInUser=null;
+  localStorage.removeItem("currentUser");
+  renderAuth();
+}
+
+function renderAuth(){
+  const authArea=document.getElementById("authArea");
+  const inputArea=document.getElementById("inputArea");
+  const info=document.getElementById("userInfo");
+  if(loggedInUser){
+    authArea.style.display="none";
+    inputArea.style.display="flex";
+    info.innerHTML=`<p>👋 Hi <b>${loggedInUser}</b> <button onclick="logout()">Logout</button></p>`;
+  }else{
+    authArea.style.display="flex";
+    inputArea.style.display="none";
+    info.innerHTML="";
+  }
+  render();
+}
+
+function render(){
+  const container=document.getElementById("posts");
+  container.innerHTML="";
+  posts.forEach((p,i)=>{
+    const div=document.createElement("div");
+    div.className="post";
+    const text=document.createElement("p");
+    text.innerHTML=`<b>${p.user}</b>: ${p.text}`;
+    const like=document.createElement("button");
+    like.className="like-btn";
+    like.textContent=`❤️ ${p.likes||0}`;
+    like.onclick=()=>toggleLike(i);
+    const del=document.createElement("button");
+    del.className="delete-btn";
+    del.textContent="Delete";
+    del.style.display=adminMode?"inline-block":"none";
+    del.onclick=()=>{posts.splice(i,1);save();render();updateBoard();};
+    div.append(text,like,del);
+    container.appendChild(div);
+  });
+  updateBoard();
+}
+
+function toggleLike(i){
+  if(!loggedInUser)return alert("Please login first!");
+  const user=users[loggedInUser];
+  const post=posts[i];
+  const id=post.text+"_"+post.user;
+  if(user.likes[id])return alert("You already liked this post!");
+  post.likes=(post.likes||0)+1;
+  user.likes[id]=true;
+  save();
+  render();
+}
+
+function addPost(){
+  if(!loggedInUser)return alert("Please login first!");
+  const val=document.getElementById("messageInput").value.trim();
+  if(!val)return;
+  posts.push({text:val,likes:0,user:loggedInUser});
+  document.getElementById("messageInput").value="";
+  save();
+  render();
+}
+
+function updateBoard(){
+  const sorted=[...posts].sort((a,b)=>b.likes-a.likes);
+  const list=document.getElementById("boardList");
+  list.innerHTML="";
+  sorted.forEach(p=>{
+    const li=document.createElement("li");
+    li.textContent=`${p.text} by ${p.user} (${p.likes} ❤️)`;
+    list.appendChild(li);
+  });
+}
+
+document.addEventListener("keydown",e=>{
+  if(e.key.toLowerCase()==="9"){
+    const pass=prompt("Enter admin password to toggle delete mode:");
+    if(pass==="lizrocks"){adminMode=!adminMode;render();}
+    else alert("Incorrect password");
+  }
+});
+
+renderAuth();
+</script>
+</body>
+</html>
