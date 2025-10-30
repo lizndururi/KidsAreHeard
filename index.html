@@ -46,6 +46,56 @@
 <p id="adminHint">(press 8 to toggle admin mode)</p>
 
 <script>
+// ----------------------
+// Baserow Backend Setup
+// ----------------------
+const API_TOKEN = "YOUR_API_TOKEN"; // Replace with your Baserow API token
+const BASE_URL = "https://<your-baserow-instance>/api/database/rows/table/";
+const COMMENTS_TABLE_ID = 723365;
+const USERS_TABLE_ID = 723352;
+let currentUserId = null; // Logged in user's row ID in Baserow
+
+// ----------------------
+// Baserow Functions
+// ----------------------
+async function fetchCommentsBaserow() {
+  try {
+    const response = await fetch(`${BASE_URL}${COMMENTS_TABLE_ID}/`, {
+      method: "GET",
+      headers: { "Authorization": `Token ${API_TOKEN}`, "Content-Type": "application/json" }
+    });
+    const data = await response.json();
+    console.log("Baserow comments:", data.results);
+  } catch (e){ console.error("Error fetching comments from Baserow:", e); }
+}
+
+async function addCommentBaserow(userId, commentText) {
+  try {
+    const response = await fetch(`${BASE_URL}${COMMENTS_TABLE_ID}/`, {
+      method: "POST",
+      headers: { "Authorization": `Token ${API_TOKEN}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ user: userId, commentText: commentText, likes: 0 })
+    });
+    const data = await response.json();
+    console.log("Comment added to Baserow:", data);
+  } catch(e){ console.error("Error adding comment to Baserow:", e); }
+}
+
+async function updateLikesBaserow(commentRowId, newLikesCount) {
+  try {
+    const response = await fetch(`${BASE_URL}${COMMENTS_TABLE_ID}/${commentRowId}/`, {
+      method:"PATCH",
+      headers: { "Authorization": `Token ${API_TOKEN}`, "Content-Type":"application/json" },
+      body: JSON.stringify({ likes:newLikesCount })
+    });
+    const data = await response.json();
+    console.log("Likes updated in Baserow:", data);
+  } catch(e){ console.error("Error updating likes in Baserow:", e); }
+}
+
+// ----------------------
+// Original Kids Are Heard Code
+// ----------------------
 let posts = JSON.parse(localStorage.getItem("postsData")||"[]");
 let users = JSON.parse(localStorage.getItem("usersData")||"{}");
 let loggedInUser = localStorage.getItem("currentUser") || null;
@@ -96,6 +146,7 @@ function renderAuth(){
     inputArea.style.display="none";
     info.innerHTML="";
   }
+  fetchCommentsBaserow(); // Fetch Baserow comments on auth change
   render();
 }
 
@@ -110,7 +161,7 @@ function render(){
     const like=document.createElement("button");
     like.className="like-btn";
     like.textContent=`❤️ ${p.likes||0}`;
-    like.onclick=()=>toggleLike(i);
+    like.onclick=()=>{ if(p.id) updateLikesBaserow(p.id,p.likes+1); else toggleLike(i); };
     const del=document.createElement("button");
     del.className="delete-btn";
     del.textContent="Delete";
@@ -138,10 +189,13 @@ function addPost(){
   if(!loggedInUser)return alert("Please login first!");
   const val=document.getElementById("messageInput").value.trim();
   if(!val)return;
-  posts.push({text:val,likes:0,user:loggedInUser});
+  if(currentUserId) addCommentBaserow(currentUserId,val); // Send to Baserow
+  else { // fallback local
+    posts.push({text:val,likes:0,user:loggedInUser});
+    save();
+    render();
+  }
   document.getElementById("messageInput").value="";
-  save();
-  render();
 }
 
 function updateBoard(){
@@ -156,7 +210,7 @@ function updateBoard(){
 }
 
 document.addEventListener("keydown",e=>{
-  if(e.key.toLowerCase()==="9"){
+  if(e.key.toLowerCase()==="8"){
     const pass=prompt("Enter admin password to toggle delete mode:");
     if(pass==="lizrocks"){adminMode=!adminMode;render();}
     else alert("Incorrect password");
